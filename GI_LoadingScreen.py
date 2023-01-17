@@ -8,6 +8,7 @@ from typing import Tuple
 import numpy as np
 
 def crop_to_resolution(image: Image, resolution: Tuple[int, int]) -> Image:
+    """Crops image to resolution. If resolution is equal, does nothing. Input should not be smaller  than target resolution."""
     width, height = image.size
     target_width, target_height = resolution
 
