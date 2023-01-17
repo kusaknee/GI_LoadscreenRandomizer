@@ -7,6 +7,26 @@ from PIL import ImageEnhance
 from typing import Tuple
 import numpy as np
 
+def crop_to_resolution(image: Image, resolution: Tuple[int, int]) -> Image:
+    width, height = image.size
+    target_width, target_height = resolution
+
+    if width == target_width and height == target_height:
+        return image
+
+    width_offset = abs(target_width - width) // 2
+    height_offset = abs(target_height - height) // 2
+
+    left_width_offset = width_offset
+    if (width - (width_offset * 2)) > target_width:
+        left_width_offset += 1
+
+    top_height_offset = height_offset
+    if (height - (height_offset * 2)) > target_height:
+        top_height_offset += 1
+
+    return image.crop((left_width_offset, top_height_offset, width - width_offset, height - height_offset))
+
 def apply_effect(image: Image, resolution: Tuple[int, int]) -> Image:
     image = image.transpose(Image.FLIP_TOP_BOTTOM)
     width, height = image.size
@@ -29,7 +49,7 @@ def apply_effect(image: Image, resolution: Tuple[int, int]) -> Image:
     background = Image.new("RGBA", resolution, (0,0,0,1))
     background.paste(image, offset)
     # Create Gaussian Blur
-    background = background.filter(ImageFilter.GaussianBlur(radius=min(width,height)/8))
+    background = background.filter(ImageFilter.GaussianBlur(radius=min(width, height)//8))
     # alpha = background.split()[3]
     # # Normalize the alpha values
     # alpha = Image.eval(alpha, lambda a: 255 * a / 128)
@@ -37,8 +57,23 @@ def apply_effect(image: Image, resolution: Tuple[int, int]) -> Image:
     # background.putalpha(alpha)
     background.paste(image, offset)
     background = background.convert('RGBA')
-    color_layer = Image.new("RGBA", resolution, color_avg(image))
-    composite = Image.alpha_composite(color_layer, background)
+
+    # Resize the image to be larger so it can be blurred down.
+    big_image_layer = image.copy()
+    if aspect_ratio > target_aspect_ratio:
+        # Image is wider than target resolution
+        new_width = int(target_height * aspect_ratio)
+        big_image_layer = big_image_layer.resize((new_width, target_height))
+    else:
+        # Image is taller than target resolution
+        new_height = int(target_width / aspect_ratio)
+        big_image_layer = big_image_layer.resize((target_width, new_height))
+
+    big_image_layer = crop_to_resolution(big_image_layer, resolution)
+    big_image_layer = big_image_layer.filter(ImageFilter.GaussianBlur(radius=20))
+    big_image_layer = big_image_layer.convert('RGBA')
+
+    composite = Image.alpha_composite(big_image_layer, background)
     return composite
 
 def color_avg(image: Image) -> Tuple[int, int, int]:
@@ -128,7 +163,7 @@ with open(ini_file, "w") as f:
 
     for i in range(len(input_files)):
         f.write(f"else if $is_load_prev && $curr_img == {i}\n")
-        f.write(f"	this = ResourceLS.{i}\n")
+        f.write(f"  this = ResourceLS.{i}\n")
     f.write("endif\n")
     for i, output_file_dds in enumerate(output_files_dds):
         f.write(f"[ResourceLS.{i}]\n")
